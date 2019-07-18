@@ -30,7 +30,7 @@ if not os.path.isfile(usr_config_file):
         config.add_section('CiS2.0')
         config['CiS2.0']['github_repository'] = config['github']['repository']
         config['CiS2.0']['github_project'] = config['github']['project']
-        config['CiS2.0']['smarthseet_sheet'] = config['smartsheet']['sheet']
+        config['CiS2.0']['smartsheet_sheet'] = config['smartsheet']['sheet']
         config.remove_option('github', 'repository')
         config.remove_option('github', 'project')
         config.remove_option('smartsheet', 'sheet')
@@ -69,7 +69,7 @@ def read_project_config(project_name=None):
     config.read([def_config_file, usr_config_file])
     if (project_name is None) and config.has_option('general',
                                                     'default_project'):
-        project_name = config.has_option('general', 'default_project')
+        project_name = config['general']['default_project']
     if not project_name:
         raise ValueError(("No project specified and the 'default_project' "
                           "option in the 'general' section of your config "
@@ -108,9 +108,6 @@ def read_project_config(project_name=None):
             config['smartsheet']['token'] = (
                 config[project_name]['smartsheet_token'])
     # Complete paths
-    if not os.path.isabs(config['general']['contacts_file']):
-        config['general']['contacts_file'] = os.path.join(
-            this_dir, config['general']['contacts_file'])
     config['github']['cache_file'] = os.path.join(
         config['github']['cache_dir'],
         config['github']['cache_file_format'])

@@ -50,7 +50,6 @@ class UpdateAPI(object):
     def __init__(self, project_name=None, remote_address=None, token=None,
                  cache_repo=None):
         self.config = config.read_project_config(project_name=project_name)
-        self.names = names.Names(self.config['general']['contacts_file'])
         self.logger = logger
         self.remote_address = remote_address
         self.token = token
@@ -69,6 +68,18 @@ class UpdateAPI(object):
                 github_token = None
             self.cache_repo = GithubAPI.get_api(github_token).get_repo(
                 self.config['github']['repository'])
+        contacts = self.config['general']['contacts_file']
+        if not os.path.isfile(contacts):
+            ext = os.path.splitext(contacts)[-1]
+            contents = self.cache_repo.get_contents(contacts)
+            contacts = tempfile.NamedTemporaryFile(suffix=ext, mode='r+')
+            contacts.write(contents.decode('utf-8'))
+            contacts.seek(0)
+        try:
+            self.names = names.Names(contacts)
+        finally:
+            if not isinstance(contacts, str):
+                contacts.close()
         self.api = self.get_api(token=self.token)
         self._remote_data = None
         self.update_state()
@@ -372,7 +383,7 @@ class GithubAPI(UpdateAPI):
                 g = Github(os.environ["GITHUB_TOKEN"])
             except KeyError:
                 logger.error(
-                    "Please provide a GitHub auth token using --token "
+                    "Please provide a GitHub auth token using the config file "
                     "or the GITHUB_TOKEN env var"
                     )
                 raise

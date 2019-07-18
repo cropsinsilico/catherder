@@ -2,7 +2,7 @@ import logging
 import argparse
 from catherder import classes
 logFormatter = logging.Formatter("[%(levelname)-8s] %(message)s")
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('catherder')
 logger.setLevel(logging.INFO)
 consoleHandler = logging.StreamHandler()
 consoleHandler.setFormatter(logFormatter)

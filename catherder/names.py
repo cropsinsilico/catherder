@@ -5,12 +5,17 @@ import csv
 class Names(list):
     def __init__(self, fname, key_name='Name', key_email='E-mail Address',
                  key_github='Github Username', key_abbrev='Abbreviation'):
-        assert(os.path.isfile(fname))
         self.key_name = key_name
         self.key_email = key_email
         self.key_github = key_github
         self.key_abbrev = key_abbrev
-        with open(fname, newline='', encoding='utf-8-sig') as fd:
+        if isinstance(fname, str):
+            assert(os.path.isfile(fname))
+            with open(fname, newline='', encoding='utf-8-sig') as fd:
+                reader = csv.DictReader(fd)
+                people = [row for row in reader]
+        else:
+            fd = fname
             reader = csv.DictReader(fd)
             people = [row for row in reader]
         super(Names, self).__init__(people)
