@@ -11,10 +11,8 @@ from collections import OrderedDict
 import smartsheet
 import github
 from github import Github, Consts
-import names
-import utils
-import config
-logger = logging.getLogger('CiS2.0')
+from catherder import names, utils, config
+logger = logging.getLogger(__name__)
 
 
 _github_issue_format = """\
@@ -49,7 +47,10 @@ class UpdateAPI(object):
     remote_address_default = None
     dependent_on_remote_data = []
 
-    def __init__(self, remote_address=None, token=None, cache_repo=None):
+    def __init__(self, project_name=None, remote_address=None, token=None,
+                 cache_repo=None):
+        self.config = config.read_project_config(project_name=project_name)
+        self.names = names.Names(self.config['general']['contacts_file'])
         self.logger = logger
         self.remote_address = remote_address
         self.token = token
@@ -58,19 +59,25 @@ class UpdateAPI(object):
         if self.remote_address is None:
             self.remote_address = self.remote_address_default
         if self.token is None:
-            self.token = config.config[self.name]['token']
+            self.token = self.config[self.name]['token']
         if not self.token:
             self.token = os.environ.get(
-                config.config[self.name]['token_env_var'], None)
+                self.config[self.name]['token_env_var'], None)
         if self.cache_repo is None:
-            github_token = config.config['github']['token']
+            github_token = self.config['github']['token']
             if not github_token:
                 github_token = None
             self.cache_repo = GithubAPI.get_api(github_token).get_repo(
-                config.config['github']['repository'])
+                self.config['github']['repository'])
         self.api = self.get_api(token=self.token)
         self._remote_data = None
         self.update_state()
+
+    @property
+    def cache_file_format(self):
+        r"""str: Format string that should be used for creating cache file
+        names."""
+        return self.config[self.name]['cache_file']
 
     @property
     def remote_data(self):
@@ -321,29 +328,38 @@ class GithubAPI(UpdateAPI):
     r"""Class for managing the Github issues.
 
     Args:
-        project_name (str, optional): Project where issues are being managed.
-            Defaults to config.config['github']['project'].
+        github_project_name (str, optional): Project where issues are being
+            managed. Defaults to self.config['github']['project'].
 
     """
 
     name = 'github'
-    cache_file_format = config.config['github']['cache_file']
-    remote_address_default = config.config['github']['repository']
 
     def __init__(self, *args, **kwargs):
-        self.project_name = kwargs.pop('project_name',
-                                       config.config['github']['project'])
-        self._project = None
+        self._github_project_name = kwargs.pop('github_project_name', None)
+        self._github_project = None
         super(GithubAPI, self).__init__(*args, **kwargs)
 
     @property
-    def project(self):
+    def remote_address_default(self):
+        r"""str: The address associated with the remote project data."""
+        return self.config['github']['repository']
+
+    @property
+    def github_project_name(self):
+        r"""str: Name of the Github project."""
+        if self._github_project_name is None:
+            self._github_project_name = self.config['github']['project']
+        return self._github_project_name
+
+    @property
+    def github_project(self):
         r"""github.Project.Project: Github project."""
-        if self._project is None:
-            self._project = self.get_entry(self.remote_data.get_projects(),
-                                           'name', self.project_name,
-                                           by_attr=True)
-        return self._project
+        if self._github_project is None:
+            self._github_project = self.get_entry(
+                self.remote_data.get_projects(), 'name',
+                self.github_project_name, by_attr=True)
+        return self._github_project
 
     @classmethod
     def get_api(cls, token=None):
@@ -531,8 +547,7 @@ class GithubAPI(UpdateAPI):
             out['state'] = 'closed'
         return out
 
-    @classmethod
-    def get_issue_from_Smartsheet_milestone(cls, milestone,
+    def get_issue_from_Smartsheet_milestone(self, milestone,
                                             existing_tasks=None,
                                             existing_info=None,
                                             assignees=None,
@@ -575,8 +590,8 @@ class GithubAPI(UpdateAPI):
                'milestone': milestone['Supporting Objective'],
                'assignees': assignees}
         # Assign issues to the reocrded PI and collaborators
-        primary = names.names.name2github(milestone['Assigned To'])
-        collab = [names.names.abbrev2github(x.strip()) for x in
+        primary = self.names.name2github(milestone['Assigned To'])
+        collab = [self.names.abbrev2github(x.strip()) for x in
                   milestone['Collaborator'].split(',')]
         # Uncomment this when people are added
         if update_assignees:
@@ -645,7 +660,7 @@ class GithubAPI(UpdateAPI):
         """
         regex_obj = '([0-9]+)([A-Z]+)([0-9]+):'
         if column_name is None:
-            column_name = list(self.project.get_columns())
+            column_name = list(self.github_project.get_columns())
         if isinstance(column_name, list):
             for column in column_name:
                 self.sort_cards(column)
@@ -653,7 +668,7 @@ class GithubAPI(UpdateAPI):
         elif isinstance(column_name, github.ProjectColumn.ProjectColumn):
             column = column_name
         else:
-            column = self.get_entry(self.project.get_columns(), 'name',
+            column = self.get_entry(self.github_project.get_columns(), 'name',
                                     column_name, by_attr=True)
         keymap = ('0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'
                   'abcdefghijklmnopqrstuvwxyz')
@@ -706,14 +721,14 @@ class GithubAPI(UpdateAPI):
         if (card_prefix is None) and (issue is None):
             raise ValueError("Either card_prefix or issue must be provided.")
         if column_name is None:
-            column_list = self.project.get_columns()
+            column_list = self.github_project.get_columns()
         elif isinstance(column_name, github.ProjectColumn.ProjectColumn):
             column_list = [column_name]
         elif isinstance(column_name, list):
             column_list = column_name
         else:
-            column_list = [self.get_entry(self.project.get_columns(), 'name',
-                                          column_name, by_attr=True)]
+            column_list = [self.get_entry(self.github_project.get_columns(),
+                                          'name', column_name, by_attr=True)]
         card = None
         kwargs = {'default': None}
         if card_prefix is not None:
@@ -815,12 +830,15 @@ class GithubAPI(UpdateAPI):
 class SmartsheetAPI(UpdateAPI):
 
     name = 'smartsheet'
-    cache_file_format = config.config['smartsheet']['cache_file']
-    remote_address_default = config.config['smartsheet']['sheet']
 
     def __init__(self, *args, **kwargs):
         self._contacts = None
         super(SmartsheetAPI, self).__init__(*args, **kwargs)
+
+    @property
+    def remote_address_default(self):
+        r"""str: The address associated with the remote project data."""
+        return self.config['smartsheet']['sheet']
 
     @property
     def contacts(self):
@@ -918,7 +936,7 @@ class SmartsheetAPI(UpdateAPI):
         if not contacts_map:
             raise ValueError(("Your contacts list is empty. Upload contacts "
                               "from the contacts files: %s")
-                             % config.config['general']['contacts_file'])
+                             % self.config['general']['contacts_file'])
         rows_map = {}
         updated_rows = []
         for row in self.remote_data.rows:
@@ -1052,7 +1070,7 @@ class SmartsheetAPI(UpdateAPI):
         map_objectives = {x['Task Name']: x for x in prev['objectives']}
         map_milestones = {x['Task Name']: x for x in prev['milestones']}
         # Create mapping from issue titles to columns & cards
-        column_list = other.project.get_columns()
+        column_list = other.github_project.get_columns()
         card_map = {}
         for col in column_list:
             for card in col.get_cards(archived_state='all'):

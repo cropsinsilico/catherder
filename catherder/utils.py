@@ -6,13 +6,33 @@ import pprint
 import difflib
 import logging
 from github.GithubException import UnknownObjectException
-import names
-logger = logging.getLogger('CiS2.0')
+from catherder import config
+logger = logging.getLogger(__name__)
 
 
 def find_most_recent(fname_format, repo=None, return_tempfile=False):
+    r"""Find the most recent cache file.
+
+    Args:
+        fname_format (str): Format string that should be used to locate
+            cache files.
+        repo (github.Repository.Repository, optional): Github repository
+            where the caches are stored. Defaults to None and local files
+            are checked (assuming that the files are local).
+        return_tempfile (bool, optional): If True and repo is provided, a
+            temporary file is created containing the contents of the most
+            recent cache in the repo (including files not contained in the
+            local repository) and the temporary file object is returned.
+
+    Returns:
+        str, file: Full path to the cache or a file descriptor for the open
+            temporary file containing the file contents if return_tempfile is
+            True.
+
+    """
     if repo is None:
-        fname_glob = fname_format.replace(names.time_format, '*')
+        fname_glob = fname_format.replace(
+            config.default_config['general']['time_format'], '*')
         all_files = sorted(glob.glob(fname_glob))
         if all_files:
             return all_files[-1]

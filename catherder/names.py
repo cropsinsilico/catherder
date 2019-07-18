@@ -1,6 +1,5 @@
 import os
 import csv
-import config
 
 
 class Names(list):
@@ -47,6 +46,3 @@ class Names(list):
 
     def github2abbrev(self, name):
         return self.convert_name(self.key_github, self.key_abbrev, name)
-
-
-names = Names(config.config['general']['contacts_file'])

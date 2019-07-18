@@ -1,4 +1,4 @@
-import classes
+from catherder import classes
 
 
 def test_milestone2issue():
