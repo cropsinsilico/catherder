@@ -11,10 +11,13 @@ logger = logging.getLogger(__name__)
 
 # Create user config file
 this_dir = os.path.dirname(__file__)
+project_dir = os.path.expanduser(os.path.join('~', '.catherder_projects'))
 def_config_file = os.path.join(this_dir, 'default_project.cfg')
 usr_config_file = os.path.expanduser(os.path.join('~', '.catherder.cfg'))
 usr_config_file_old = os.path.expanduser(os.path.join(
     '~', '.CiS2.0_management.cfg'))
+if not os.path.isdir(project_dir):
+    os.mkdir(project_dir)
 if not os.path.isfile(usr_config_file):
     if os.path.isfile(usr_config_file_old):  # pragma: no cover
         # This specifically handles backwards compatibility with the previous
@@ -44,6 +47,24 @@ if not os.path.isfile(usr_config_file):
                     % (usr_config_file, def_config_file))
 
 
+def initial_config():
+    r"""Perform initial configuration steps, asking for user input."""
+    usr_config = configparser.ConfigParser(
+        interpolation=configparser.ExtendedInterpolation())
+    usr_config.read(usr_config_file)
+    usr_config['general']['default_project'] = input(
+        'What is the name of the project that should be managed by default?: ')
+    usr_config['github']['token'] = input(
+        'What is your Github authentication token?: ')
+    usr_config['smartsheet']['token'] = input(
+        'What is your Smartsheet authenticaiton token?: ')
+    with open(usr_config_file, 'w') as fd:
+        usr_config.write(fd)
+    # Update default_config by re-reading updated files
+    global default_config
+    default_config.read([def_config_file, usr_config_file])
+
+
 def read_project_config(project_name=None):
     r"""Read a configuration file for a project. If the file dosn't exist, an
     empty one will be created for the project with the format
@@ -71,27 +92,28 @@ def read_project_config(project_name=None):
                                                     'default_project'):
         project_name = config['general']['default_project']
     if not project_name:
-        raise ValueError(("No project specified and the 'default_project' "
-                          "option in the 'general' section of your config "
-                          "file is not set."))
+        raise ValueError("No project specified and the 'default_project' "
+                         "option in the 'general' section of your config "
+                         "file is not set.")
     # Create section for a missing project
     if (project_name is not True) and (not config.has_section(project_name)):
-        config.add_section(project_name)
-        config.add_option(project_name, 'github_repository',
-                          input(('Enter the name of the Github repository '
-                                 'containing the project '
-                                 'and issues that should be synced '
-                                 'in the form <user/organization>/<repo>. '
-                                 'This repo is also used to cache data on '
-                                 'the status of the project.: ')))
-        config.add_option(project_name, 'github_project',
-                          input(('Enter the name of the Github project that '
-                                 'tracks issues in the specified repo.: ')))
-        config.add_option(project_name, 'smartsheet_sheet',
-                          input(('Enter the name of the Smartsheet sheet that '
-                                 'should be synced.: ')))
+        usr_config = configparser.ConfigParser(
+            interpolation=configparser.ExtendedInterpolation())
+        usr_config.read(usr_config_file)
+        usr_config.add_section(project_name)
+        usr_config[project_name]['github_repository'] = input(
+            'Enter the name of the Github repository containing the project '
+            'and issues that should be synced in the form '
+            '<user/organization>/<repo>. This repo is also used to cache data '
+            'on the status of the project.: ')
+        usr_config[project_name]['github_project'] = input(
+            'Enter the name of the Github project that tracks issues in the '
+            'specified repo.: ')
+        usr_config[project_name]['smartsheet_sheet'] = input(
+            'Enter the name of the Smartsheet sheet that should be synced.: ')
         with open(usr_config_file, 'w') as fd:
-            config.write(fd)
+            usr_config.write(fd)
+        return read_project_config(project_name=project_name)
     # Update global results based on project specific settings
     if (project_name is not True):
         config['github']['repository'] = (

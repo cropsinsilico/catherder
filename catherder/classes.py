@@ -7,6 +7,7 @@ import datetime
 import shutil
 import pprint
 import logging
+import tempfile
 from collections import OrderedDict
 import smartsheet
 import github
@@ -49,6 +50,7 @@ class UpdateAPI(object):
 
     def __init__(self, project_name=None, remote_address=None, token=None,
                  cache_repo=None):
+        self.project_name = project_name
         self.config = config.read_project_config(project_name=project_name)
         self.logger = logger
         self.remote_address = remote_address
@@ -71,7 +73,7 @@ class UpdateAPI(object):
         contacts = self.config['general']['contacts_file']
         if not os.path.isfile(contacts):
             ext = os.path.splitext(contacts)[-1]
-            contents = self.cache_repo.get_contents(contacts)
+            contents = self.cache_repo.get_contents(contacts).decoded_content
             contacts = tempfile.NamedTemporaryFile(suffix=ext, mode='r+')
             contacts.write(contents.decode('utf-8'))
             contacts.seek(0)
@@ -80,9 +82,20 @@ class UpdateAPI(object):
         finally:
             if not isinstance(contacts, str):
                 contacts.close()
+        if not os.path.isdir(self.project_dir):
+            os.mkdir(self.project_dir)
+        cache_dir = os.path.join(self.project_dir,
+                                 self.config[self.name]['cache_dir'])
+        if not os.path.isdir(cache_dir):
+            os.mkdir(cache_dir)
         self.api = self.get_api(token=self.token)
         self._remote_data = None
         self.update_state()
+
+    @property
+    def project_dir(self):
+        r"""str: Directory used to store cache entries for the project."""
+        return os.path.join(config.project_dir, self.project_name)
 
     @property
     def cache_file_format(self):
@@ -223,14 +236,15 @@ class UpdateAPI(object):
         fname_old = utils.find_most_recent(self.cache_file_format,
                                            repo=self.cache_repo)
         fname_new = now.strftime(self.cache_file_format)
-        self.download_remote(fname_new)
+        fname_new_local = os.path.join(self.project_dir, fname_new)
+        self.download_remote(fname_new_local)
         if fname_old is None:
             self.commit_state(fname_new,
                               "Creating initial %s cache" % self.name,
                               '%s cache does not exist. Should one be created?'
                               % self.name)
         else:
-            diff = utils.get_diff(fname_old, fname_new)
+            diff = utils.get_diff(fname_old, fname_new_local)
             if diff:
                 self.commit_state(fname_new,
                                   "Updating %s cache" % self.name,
@@ -239,8 +253,8 @@ class UpdateAPI(object):
                                   % (self.name, diff))
             else:
                 logger.info("%s cache remains the same." % self.name)
-        if os.path.isfile(fname_new) and (self.cache_repo is not None):
-            os.remove(fname_new)
+        if os.path.isfile(fname_new_local) and (self.cache_repo is not None):
+            os.remove(fname_new_local)
         self.local_data = self.load_most_recent()
 
     def commit_state(self, new_cache, message, question=None):
@@ -253,13 +267,14 @@ class UpdateAPI(object):
                 removed after being committed.
 
         """
+        new_cache_local = os.path.join(self.project_dir, new_cache)
         if question is None:
             question = "Create new cache?"
         print(question)
         if (input('y/[n]?: ').lower() in ['y', 'yes']):
-            with open(new_cache, 'rb') as fd:
+            with open(new_cache_local, 'rb') as fd:
                 self.cache_repo.create_file(new_cache, message, fd.read())
-        os.remove(new_cache)
+        os.remove(new_cache_local)
 
     def load_most_recent(self, default=False):
         r"""Get the remote data for the specified address.

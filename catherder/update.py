@@ -1,6 +1,6 @@
 import logging
 import argparse
-from catherder import classes
+from catherder import classes, config
 logFormatter = logging.Formatter("[%(levelname)-8s] %(message)s")
 logger = logging.getLogger('catherder')
 logger.setLevel(logging.INFO)
@@ -13,6 +13,8 @@ def call_catherder():
     r"""Call catherder."""
     parser = argparse.ArgumentParser(
         "Update the cache's of project data on Github/Smartsheet.")
+    parser.add_argument('--configure', action='store_true',
+                        help='Run configuration for the specified projects.')
     parser.add_argument('project', nargs='*',
                         help='The names of one or more projects to sync.')
     parser.add_argument('--sort-project-cards', action='store_true',
@@ -29,8 +31,14 @@ def call_catherder():
                               'across columns.'))
     args = parser.parse_args()
     if not args.project:
-        args.project.append(None)
+        if config.default_config.has_option('general', 'default_project'):
+            args.project.append(
+                config.default_config['general']['default_project'])
+        else:
+            config.initial_config()
     for project in args.project:
+        if args.configure:
+            config.read_project_config(project)
         x_sm = classes.SmartsheetAPI(project_name=project)
         x_gh = classes.GithubAPI(project_name=project)
         if args.smartsheet:
