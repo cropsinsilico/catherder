@@ -49,13 +49,14 @@ class UpdateAPI(object):
     dependent_on_remote_data = []
 
     def __init__(self, project_name=None, remote_address=None, token=None,
-                 cache_repo=None):
+                 cache_repo=None, always_yes=False):
         self.project_name = project_name
         self.config = config.read_project_config(project_name=project_name)
         self.logger = logger
         self.remote_address = remote_address
         self.token = token
         self.cache_repo = cache_repo
+        self.always_yes = always_yes
         self.local_data = None
         if self.remote_address is None:
             self.remote_address = self.remote_address_default
@@ -75,7 +76,7 @@ class UpdateAPI(object):
             ext = os.path.splitext(contacts)[-1]
             contents = self.cache_repo.get_contents(contacts).decoded_content
             contacts = tempfile.NamedTemporaryFile(suffix=ext, mode='r+')
-            contacts.write(contents.decode('utf-8'))
+            contacts.write(contents.decode('utf-8-sig'))
             contacts.seek(0)
         try:
             self.names = names.Names(contacts)
@@ -196,7 +197,7 @@ class UpdateAPI(object):
         diff = utils.get_diff(old, new)
         if diff:
             self.logger.info("Diff = \n%s\n" % diff)
-            if (input('y/[n]?: ').lower() in ['y', 'yes']):
+            if self.always_yes or (input('y/[n]?: ').lower() in ['y', 'yes']):
                 if new is not None:
                     self.upload_remote(new, **kwargs)
                 self.update_state()
@@ -271,7 +272,7 @@ class UpdateAPI(object):
         if question is None:
             question = "Create new cache?"
         print(question)
-        if (input('y/[n]?: ').lower() in ['y', 'yes']):
+        if self.always_yes or (input('y/[n]?: ').lower() in ['y', 'yes']):
             with open(new_cache_local, 'rb') as fd:
                 self.cache_repo.create_file(new_cache, message, fd.read())
         os.remove(new_cache_local)
@@ -517,12 +518,14 @@ class GithubAPI(UpdateAPI):
                 if diff:
                     print(("Milestone '%s' already exists. Should it be "
                            "updated? The diff is \n%s\n") % (x['title'], diff))
-                    if (input('y/[n]?: ').lower() in ['y', 'yes']):
+                    if self.always_yes or (input('y/[n]?: ').lower()
+                                           in ['y', 'yes']):
                         x_obj.edit(**x)
             # Create a new milestone after confirming with the user
             else:
                 print('Create new milestone?\n%s\n' % pprint.pformat(x))
-                if (input('y/[n]?: ').lower() in ['y', 'yes']):
+                if self.always_yes or (input('y/[n]?: ').lower()
+                                       in ['y', 'yes']):
                     x_obj = self.remote_data.create_milestone(**x)
         # Update issues
         for x_orig in data['issues']:
@@ -541,13 +544,15 @@ class GithubAPI(UpdateAPI):
                 if diff:
                     print(("Issue '%s' already exists. Should it be updated? "
                            "The diff is \n%s\n") % (x['title'], diff))
-                    if (input('y/[n]?: ').lower() in ['y', 'yes']):
+                    if self.always_yes or (input('y/[n]?: ').lower()
+                                           in ['y', 'yes']):
                         x_obj.edit(**x)
             # Create a new issue after confirming with the user
             else:
                 x.pop('state')
                 print('Create new issue?\n%s\n' % pprint.pformat(x))
-                if (input('y/[n]?: ').lower() in ['y', 'yes']):
+                if self.always_yes or (input('y/[n]?: ').lower()
+                                       in ['y', 'yes']):
                     return self.remote_data.create_issue(**x)
         # Restore automation card
         if suspend_progress_automation:

@@ -121,6 +121,5 @@ Todo
 
 - Make package general (e.g. 'Task Name' column coded in config file)
 - Create method for getting contacts from Smartsheet
-- Option to suspend asking the user to approve changes
 - Command for rolling back to a previous cache entry
 - Directions for deploying as heroku app

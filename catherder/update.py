@@ -29,6 +29,9 @@ def call_catherder():
     parser.add_argument('--suspend-automation', action='store_true',
                         help=('Suspend automation of project card movement '
                               'across columns.'))
+    parser.add_argument('--yes', '-y', action='store_true',
+                        help=('Automatically answer yes to all questions '
+                              'about updates.'))
     args = parser.parse_args()
     if not args.project:
         if config.default_config.has_option('general', 'default_project'):
@@ -39,8 +42,8 @@ def call_catherder():
     for project in args.project:
         if args.configure:
             config.read_project_config(project)
-        x_sm = classes.SmartsheetAPI(project_name=project)
-        x_gh = classes.GithubAPI(project_name=project)
+        x_sm = classes.SmartsheetAPI(project_name=project, always_yes=args.yes)
+        x_gh = classes.GithubAPI(project_name=project, always_yes=args.yes)
         if args.smartsheet:
             logger.info("Updating Smartsheet from Github")
             x_sm.update_remote(x_gh)
