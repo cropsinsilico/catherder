@@ -614,19 +614,31 @@ class GithubAPI(UpdateAPI):
             existing_info = ''
         if assignees is None:
             assignees = []
+        fmt_kws = dict(milestone, existing_tasks=existing_tasks,
+                       existing_info=existing_info)
+        if 'Collaborator' not in fmt_kws:
+            if ',' in fmt_kws['Assigned To']:
+                fmt_kws['Assigned To'], fmt_kws['Collaborator'] = (
+                    fmt_kws['Assigned To'].split(',', 1))
+                fmt_kws['Assigned To'] = fmt_kws['Assigned To'].strip()
+                # fmt_kws['Collaborator'] = fmt_kws['Collaborator'].strip()
+                fmt_kws['Collaborator'] = ', '.join(
+                    [self.names.name2abbrev(x.strip()) for x in
+                     fmt_kws['Collaborator'].split(',')])
+            else:
+                fmt_kws['Collaborator'] = ''
         out = {'title': milestone['Task Name'],
-               'body': _github_issue_format.format(
-                   existing_tasks=existing_tasks, existing_info=existing_info,
-                   **milestone),
+               'body': _github_issue_format.format(**fmt_kws),
                'milestone': milestone['Supporting Objective'],
                'assignees': assignees}
         # Assign issues to the reocrded PI and collaborators
-        primary = self.names.name2github(milestone['Assigned To'])
-        collab = [self.names.abbrev2github(x.strip()) for x in
-                  milestone['Collaborator'].split(',')]
-        # Uncomment this when people are added
         if update_assignees:
-            for x in [primary] + collab:
+            assignees = [self.names.name2github(x.strip()) for x in
+                         milestone['Assigned To'].split(',')]
+            if 'Collaborator' in milestone:
+                assignees += [self.names.abbrev2github(x.strip()) for x in
+                              milestone['Collaborator'].split(',')]
+            for x in assignees:
                 if x and (x not in out['assignees']):
                     out['assignees'].append(x)
         # Set status
@@ -1124,6 +1136,11 @@ class SmartsheetAPI(UpdateAPI):
                 self.logger.info("Non-milestone issue: '%s'" % x_gh['title'])
                 continue
             x_sm = self.get_milestone_from_Github_issue(x_gh)
+            if x_sm.get('Collaborator', None):
+                x_sm['Assigned To'] += ', ' + ', '.join(
+                    [self.names.abbrev2name(x.strip()) for x in
+                     x_sm['Collaborator'].split(',')])
+            x_sm.pop('Collaborator', None)
             y_sm = map_milestones.get(x_sm['Task Name'], None)
             column = card_map[x_gh['title']]['column'].name
             if column == 'In progress':
