@@ -621,10 +621,7 @@ class GithubAPI(UpdateAPI):
                 fmt_kws['Assigned To'], fmt_kws['Collaborator'] = (
                     fmt_kws['Assigned To'].split(',', 1))
                 fmt_kws['Assigned To'] = fmt_kws['Assigned To'].strip()
-                # fmt_kws['Collaborator'] = fmt_kws['Collaborator'].strip()
-                fmt_kws['Collaborator'] = ', '.join(
-                    [self.names.name2abbrev(x.strip()) for x in
-                     fmt_kws['Collaborator'].split(',')])
+                fmt_kws['Collaborator'] = fmt_kws['Collaborator'].strip()
             else:
                 fmt_kws['Collaborator'] = ''
         out = {'title': milestone['Task Name'],
@@ -746,7 +743,7 @@ class GithubAPI(UpdateAPI):
             card_prefix (str, optional): Start of the card that should be
                 returned. Defaults to None and is ignored.
             issue (github.Issue.Issue, optional): Github issue that associated
-                card should be located. Defaults to Noen and is ignored.
+                card should be located. Defaults to None and is ignored.
             return_column (bool, optional): If True, the column containing the
                 card is returned instead of the card itself. Defaults to False.
             default (object, optional): Entry that should be returned if a
@@ -1137,9 +1134,7 @@ class SmartsheetAPI(UpdateAPI):
                 continue
             x_sm = self.get_milestone_from_Github_issue(x_gh)
             if x_sm.get('Collaborator', None):
-                x_sm['Assigned To'] += ', ' + ', '.join(
-                    [self.names.abbrev2name(x.strip()) for x in
-                     x_sm['Collaborator'].split(',')])
+                x_sm['Assigned To'] += ', ' + x_sm['Collaborator']
             x_sm.pop('Collaborator', None)
             y_sm = map_milestones.get(x_sm['Task Name'], None)
             column = card_map[x_gh['title']]['column'].name
