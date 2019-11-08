@@ -170,6 +170,11 @@ class UpdateAPI(object):
         if func_validate is None:
             def func_validate(a, b):
                 return (a == b)
+        elif func_validate == 'startswith':
+            def func_validate(a, b):
+                if a is None:
+                    return False
+                return a.startswith(b)
         for k in obj_list:
             v = func_getval(k)
             if func_validate(v, value):
@@ -297,7 +302,8 @@ class UpdateAPI(object):
         try:
             out = self.load_local(fd, default=default)
         finally:
-            fd.close()
+            if fd is not None:
+                fd.close()
         return out
 
     @classmethod
@@ -365,6 +371,7 @@ class GithubAPI(UpdateAPI):
     def __init__(self, *args, **kwargs):
         self._github_project_name = kwargs.pop('github_project_name', None)
         self._github_project = None
+        self._github_project_map = None
         super(GithubAPI, self).__init__(*args, **kwargs)
 
     @property
@@ -387,6 +394,29 @@ class GithubAPI(UpdateAPI):
                 self.remote_data.get_projects(), 'name',
                 self.github_project_name, by_attr=True)
         return self._github_project
+
+    @property
+    def github_project_map(self):
+        r"""dict: Mapping from column name to dictionaries describing
+        each column."""
+        if self._github_project_map is None:
+            self._github_project_map = OrderedDict([])
+            for x in self.github_project.get_columns():
+                self._github_project_map[x.name] = OrderedDict([
+                    ('column', x),
+                    ('cards', OrderedDict()),
+                    ('issues', OrderedDict())])
+                for card in x.get_cards():
+                    issue = card.get_content()
+                    if issue:
+                        self._github_project_map[x.name]['issues'][
+                            issue.id] = {
+                                'issue': issue,
+                                'card': card}
+                    self._github_project_map[x.name]['cards'][card.id] = {
+                        'issue': issue,
+                        'card': card}
+        return self._github_project_map
 
     @classmethod
     def get_api(cls, token=None):
@@ -420,8 +450,7 @@ class GithubAPI(UpdateAPI):
         r"""Get the remote data for the specified address."""
         return self.api.get_repo(address)
 
-    @classmethod
-    def remote2local(cls, remote_data):
+    def remote2local(self, remote_data):
         r"""Convert remote version of data to local dictionary.
 
         Args:
@@ -433,14 +462,13 @@ class GithubAPI(UpdateAPI):
         """
         milestones = []
         for m in remote_data.get_milestones(state='all'):
-            milestones.append(cls.remote2local_milestone(m))
+            milestones.append(self.remote2local_milestone(m))
         issues = []
         for i in remote_data.get_issues(state='all'):
-            issues.append(cls.remote2local_issue(i))
+            issues.append(self.remote2local_issue(i))
         return {'milestones': milestones, 'issues': issues}
 
-    @classmethod
-    def remote2local_milestone(cls, milestone):
+    def remote2local_milestone(self, milestone):
         r"""Convert Github milestone object into a dictionary.
 
         Args:
@@ -456,8 +484,7 @@ class GithubAPI(UpdateAPI):
         out['due_on'] = out['due_on'].strftime("%m/%d/%y")
         return out
 
-    @classmethod
-    def remote2local_issue(cls, issue):
+    def remote2local_issue(self, issue):
         r"""Convert Github issue object into a dictionary.
 
         Args:
@@ -474,6 +501,7 @@ class GithubAPI(UpdateAPI):
         if out['assignees']:
             out['assignees'] = [x.login for x in out['assignees']]
         out['body'] = out['body'].replace('\r\n', '\n')
+        out['column'] = self.get_card(issue=issue, return_column=True).name
         return out
 
     def download_remote(self, address):
@@ -483,7 +511,7 @@ class GithubAPI(UpdateAPI):
             json.dump(data_dict, fd)
 
     def upload_remote(self, data, update_assignees=False,
-                      suspend_progress_automation=False):
+                      suspend_progress_automation=True):
         r"""Upload new data to the remote.
 
         Args:
@@ -542,11 +570,19 @@ class GithubAPI(UpdateAPI):
                     x['assignees'] = x_orig['assignees']
                 diff = utils.get_diff(self.remote2local_issue(x_obj), x_orig)
                 if diff:
+                    x_column = x.pop('column', None)
                     print(("Issue '%s' already exists. Should it be updated? "
                            "The diff is \n%s\n") % (x['title'], diff))
                     if self.always_yes or (input('y/[n]?: ').lower()
                                            in ['y', 'yes']):
                         x_obj.edit(**x)
+                    # Move card for issue into the correct column
+                    new_column = self.github_project_map[x_column]['column']
+                    card, old_column = self.get_card(
+                        issue=x_obj, return_column_and_card=True)
+                    if old_column.id != new_column.id:
+                        self.edit_card(card, column_id=new_column.id,
+                                       position="bottom")
             # Create a new issue after confirming with the user
             else:
                 x.pop('state')
@@ -641,8 +677,13 @@ class GithubAPI(UpdateAPI):
         # Set status
         if milestone['Status'] == 'Complete':
             out['state'] = 'closed'
+            out['column'] = 'Done'
+        elif milestone['Status'].lower() == 'in progress':
+            out['state'] = 'open'
+            out['column'] = 'In progress'
         else:
             out['state'] = 'open'
+            out['column'] = 'To do'
         return out
 
     def update_from_smartsheet(self, prev, other, update_assignees=False,
@@ -691,7 +732,8 @@ class GithubAPI(UpdateAPI):
         return prev
 
     def sort_cards(self, column_name=None):
-        r"""Sort cards alphabetically, putting automation cards at the bottom.
+        r"""Sort cards alphabetically and into appropriate columns,
+        putting automation cards at the bottom.
 
         Args:
             column_name (str, optional): Name of the column that should be
@@ -700,7 +742,7 @@ class GithubAPI(UpdateAPI):
         """
         regex_obj = '([0-9]+)([A-Z]+)([0-9]+):'
         if column_name is None:
-            column_name = list(self.github_project.get_columns())
+            column_name = list(self.github_project_map.keys())
         if isinstance(column_name, list):
             for column in column_name:
                 self.sort_cards(column)
@@ -708,8 +750,7 @@ class GithubAPI(UpdateAPI):
         elif isinstance(column_name, github.ProjectColumn.ProjectColumn):
             column = column_name
         else:
-            column = self.get_entry(self.github_project.get_columns(), 'name',
-                                    column_name, by_attr=True)
+            column = self.github_project_map[column_name]['column']
         keymap = ('0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'
                   'abcdefghijklmnopqrstuvwxyz')
 
@@ -732,18 +773,16 @@ class GithubAPI(UpdateAPI):
             self.edit_card(cards[i], position=('after:%s'
                                                % cards[i - 1].id))
 
-    def get_card(self, column_name=None, card_prefix=None, issue=None,
-                 return_column=False, default=False):
-        r"""Located a project card.
+    def issue2card(self, issue, columns=None, return_column=False,
+                   default=False):
+        r"""Locate the project card associated with an issue.
 
         Args:
-            column_name (str, optional): Name of the column where the desired
-                card is located. Providing None will cause the search to be
-                accross all columns. Defaults to None.
-            card_prefix (str, optional): Start of the card that should be
-                returned. Defaults to None and is ignored.
-            issue (github.Issue.Issue, optional): Github issue that associated
-                card should be located. Defaults to None and is ignored.
+            issue (github.Issue.Issue): Github issue that associated
+                card should be located.
+            columns (str, github.ProjectColumn.ProjectColumn, list, optional):
+                One or more columns or names of columns that should be
+                searched. Defaults to None and all columns are searched.
             return_column (bool, optional): If True, the column containing the
                 card is returned instead of the card itself. Defaults to False.
             default (object, optional): Entry that should be returned if a
@@ -755,50 +794,82 @@ class GithubAPI(UpdateAPI):
 
         Raises:
             ValueError: If nither card_prefix or issue are provided.
+            TypeError: If the provided columns are not strings or column
+                objects.
+            ValueError: If the card cannot be located and default is False.
+
+        """
+        return self.get_card(columns=columns, issue=issue,
+                             return_column=return_column, default=default)
+
+    def get_card(self, columns=None, card_prefix=None, issue=None,
+                 return_column=False, return_column_and_card=False,
+                 default=False):
+        r"""Located a project card.
+
+        Args:
+            columns (str, github.ProjectColumn.ProjectColumn, list, optional):
+                One or more columns or names of columns that should be
+                searched. Defaults to None and all columns are searched.
+            card_prefix (str, optional): Start of the card that should be
+                returned. Defaults to None and is ignored.
+            issue (github.Issue.Issue, optional): Github issue that associated
+                card should be located. Defaults to None and is ignored.
+            return_column (bool, optional): If True, the column containing the
+                card is returned instead of the card itself. Defaults to False.
+            return_column_and_card (bool, optional): If True, both the
+                card and the column containing it will be returned. Defaults
+                to False.
+            default (object, optional): Entry that should be returned if a
+                match cannot be located. Defaults to False and an error will be
+                raised if a match cannot be found.
+
+        Returns:
+            github.ProjectCard.ProjectCard: Project card.
+
+        Raises:
+            ValueError: If neither card_prefix or issue are provided.
+            TypeError: If the provided columns are not strings or column
+                objects.
             ValueError: If the card cannot be located and default is False.
 
         """
         if (card_prefix is None) and (issue is None):
             raise ValueError("Either card_prefix or issue must be provided.")
-        if column_name is None:
-            column_list = self.github_project.get_columns()
-        elif isinstance(column_name, github.ProjectColumn.ProjectColumn):
-            column_list = [column_name]
-        elif isinstance(column_name, list):
-            column_list = column_name
-        else:
-            column_list = [self.get_entry(self.github_project.get_columns(),
-                                          'name', column_name, by_attr=True)]
+        if columns is None:
+            columns = list(self.github_project_map.keys())
+        elif not isinstance([columns], (list, tuple)):
+            columns = [columns]
         card = None
-        kwargs = {'default': None}
-        if card_prefix is not None:
-            def func_validate(a, b):
-                if a is None:
-                    return False
-                return a.startswith(b)
+        if issue:
+            def column2card(column):
+                return column['issues'].get(issue.id, {}).get('card', None)
 
-            kwargs.update(key='note', value=card_prefix,
-                          by_attr=True, func_validate=func_validate)
-        elif issue is not None:
-            def func_validate(a, b):
-                return (a() == b)
+        elif card_prefix:
+            def column2card(column):
+                return self.get_entry(
+                    [x['card'] for x in column['cards'].values()],
+                    key='note', value=card_prefix, default=None,
+                    by_attr=True, func_validate='startswith')
 
-            kwargs.update(key='get_content', value=issue,
-                          by_attr=True, func_validate=func_validate)
-
-        for column in column_list:
-            card = self.get_entry(column.get_cards(archived_state='all'),
-                                  **kwargs)
+        for c in columns:
+            if isinstance(c, str):
+                column = self.github_project_map[c]
+            elif isinstance(c, github.ProjectColumn.ProjectColumn):
+                column = self.github_project_map[c.name]
+            else:  # pragma: debug
+                raise TypeError("Unsupported column type: '%s'" % type(c))
+            card = column2card(column)
             if card is not None:
-                if return_column:
-                    return column
-                break
-        if card is None:
-            if default is False:
-                raise ValueError("Could not locate card with name '%s'"
-                                 % column_name)
-            card = default
-        return card
+                if return_column_and_card:
+                    return card, column['column']
+                elif return_column:
+                    return column['column']
+                else:
+                    return card
+        if default is False:
+            raise ValueError("Could not locate card.")
+        return default
 
     def edit_card(self, card, note=None, archived=None,
                   position=None, column_id=None):
@@ -808,6 +879,8 @@ class GithubAPI(UpdateAPI):
             card (github.ProjectCard.ProjectCard): Project card.
             note (str, optional): New value for note.
             archived (str, optional): New value for archived.
+            position (str, optional): New value for position.
+            column_id (str, optional): New value for column_id.
 
         """
         # Call to PATCH
@@ -849,7 +922,7 @@ class GithubAPI(UpdateAPI):
                 suspended. Defaults to '###### Automation Rules'.
 
         """
-        card = self.get_card(column_name=column_name, card_prefix=card_prefix)
+        card = self.get_card(columns=column_name, card_prefix=card_prefix)
         self.edit_card(card, archived=True)
 
     def restore_card(self, column_name, card_prefix='###### Automation Rules'):
@@ -863,7 +936,7 @@ class GithubAPI(UpdateAPI):
                 Defaults to '###### Automation Rules'.
 
         """
-        card = self.get_card(column_name=column_name, card_prefix=card_prefix)
+        card = self.get_card(columns=column_name, card_prefix=card_prefix)
         self.edit_card(card, archived=False, position='bottom')
 
 
@@ -1060,13 +1133,14 @@ class SmartsheetAPI(UpdateAPI):
         # Parse issue body to get milestone
         body = issue['body'].replace('\r\n', '\n')
         regex_entry = r'([ ]?)\{([^\}]+)\}'
-        regex_body = _github_issue_format.replace('(', '\(').replace(
-            ')', '\)')
+        regex_body = _github_issue_format.replace(  # noqa: W605
+            '(', '\(').replace(
+                ')', '\)')
         field_order = []
         for lead, x in re.findall(regex_entry, _github_issue_format):
             field_order.append(x)
             x_fmt = '{%s}' % x
-            x_rgx = '(.*|\B)?'
+            x_rgx = '(.*|\B)?'  # noqa: W605
             if lead:
                 x_fmt = lead + x_fmt
                 x_rgx = '(?:[ ]?)' + x_rgx
