@@ -87,7 +87,9 @@ From Source
 From PyPI
 ~~~~~~~~~
 
-The package has not yet been uploaded to PyPI.
+Enter the following command from your terminal prompt (or Anaconda promp on Windows).::
+
+     $ pip install catherder
 
 From conda-forge
 ~~~~~~~~~~~~~~~~

@@ -16,7 +16,7 @@ def read(filename):
 
 setup(
     name="catherder",
-    version="0.1.0",
+    version="0.0.1",
     url="https://github.com/cropsinsilico/catherder",
     license='MIT',
 
@@ -28,8 +28,7 @@ setup(
 
     packages=find_packages(exclude=('tests',)),
 
-    install_requires=['PyGithub', 'smartsheet-python-sdk',
-                      'backports'],
+    install_requires=['PyGithub', 'smartsheet-python-sdk'],
     classifiers=[
         'Development Status :: 2 - Pre-Alpha',
         'License :: OSI Approved :: MIT License',
