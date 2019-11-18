@@ -47,8 +47,8 @@ Requirements
 - Python (>= 2.7)
 - PyGithub (installed automatically in instructions below)
 - smartsheet-python-sdk (installed automatically in instructions below)
-- A Github authentication token (see steps for creating one `here <https://help.github.com/en/articles/creating-a-personal-access-token-for-the-command-line>`_)
-- A Smartsheet authentication token (see steps for creating one `here <https://smartsheet-platform.github.io/api-docs/index.html#authentication-and-access-tokens>`_)
+- A Github authentication token (see steps for creating one `here <https://help.github.com/en/articles/creating-a-personal-access-token-for-the-command-line>`__)
+- A Smartsheet authentication token (see steps for creating one `here <https://smartsheet-platform.github.io/api-docs/index.html#authentication-and-access-tokens>`__)
 
 Pre-Installation Steps
 ^^^^^^^^^^^^^^^^^^^^^^
@@ -66,8 +66,8 @@ It is recommended, but not required, that you use anaconda to manage your Python
      > conda create -n <name> python=3.6
      > activate <name>
      
-#. Create a Github authentication `token <https://help.github.com/en/articles/creating-a-personal-access-token-for-the-command-line>`_ and save it to a secure location.
-#. Create a Smartsheets authenticaiton `token <https://smartsheet-platform.github.io/api-docs/index.html#authentication-and-access-tokens>`_ and save it to a secure location.
+#. Create a Github authentication `token <https://help.github.com/en/articles/creating-a-personal-access-token-for-the-command-line>`__ and save it to a secure location.
+#. Create a Smartsheets authenticaiton `token <https://smartsheet-platform.github.io/api-docs/index.html#authentication-and-access-tokens>`__ and save it to a secure location.
 
 Installation Steps
 ^^^^^^^^^^^^^^^^^^

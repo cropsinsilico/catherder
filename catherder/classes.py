@@ -843,7 +843,7 @@ class GithubAPI(UpdateAPI):
             raise ValueError("Either card_prefix or issue must be provided.")
         if columns is None:
             columns = list(self.github_project_map.keys())
-        elif not isinstance([columns], (list, tuple)):
+        elif not isinstance(columns, (list, tuple)):
             columns = [columns]
         card = None
         if issue:
