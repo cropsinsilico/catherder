@@ -103,6 +103,28 @@ about the project that is required to complete the entry in the config file incl
 your Github and Smartsheet authentication tokens and the names of the associated
 Github repository, Github project, and Smartsheet sheet.
 
+Steps to Update
+^^^^^^^^^^^^^^^
+
+From PyPI
+~~~~~~~~~
+
+Enter the following command from your terminal prompt (or Anaconda prompt on Windows).::
+
+     $ pip install catherder -U
+
+From Source
+~~~~~~~~~~~
+
+Enter the following command from your terminal prompt (or Anaconda prompt on Windows) from inside the cloned catherder repository.::
+
+     $ git pull
+
+From conda-forge
+~~~~~~~~~~~~~~~~
+
+The package has not yet been uploaded to conda-forge.
+
 Licence
 -------
 
