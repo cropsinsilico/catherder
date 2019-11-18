@@ -74,26 +74,26 @@ def get_diff(a, b, nlines_context=5):
             as a string.
 
     """
-    if isinstance(a, (str, bytes)):
+    if isinstance(a, config.str_types):
         if os.path.isfile(a):
             with open(a, 'rb') as fd:
                 if a.endswith('.json'):
                     a = json.load(fd)
                 else:
-                    a = fd.read().splitlines(keepends=True)
+                    a = fd.read().splitlines(True)
         else:
-            a = a.splitlines(keepends=True)
-    str_a = pprint.pformat(a).splitlines(keepends=True)
-    if isinstance(b, (str, bytes)):
+            a = a.splitlines(True)
+    str_a = pprint.pformat(a).splitlines(True)
+    if isinstance(b, config.str_types):
         if os.path.isfile(b):
             with open(b, 'rb') as fd:
                 if b.endswith('.json'):
                     b = json.load(fd)
                 else:
-                    b = fd.read().splitlines(keepends=True)
+                    b = fd.read().splitlines(True)
         else:
-            b = b.splitlines(keepends=True)
-    str_b = pprint.pformat(b).splitlines(keepends=True)
+            b = b.splitlines(True)
+    str_b = pprint.pformat(b).splitlines(True)
     diff = list(difflib.unified_diff(str_a, str_b))
     # diff = list(difflib.ndiff(str_a, str_b))
     if not any([x.startswith(('-', '+', '?')) for x in diff]):

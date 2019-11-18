@@ -1,5 +1,6 @@
 import os
 import csv
+from catherder import config
 
 
 class Names(list):
@@ -9,7 +10,7 @@ class Names(list):
         self.key_email = key_email
         self.key_github = key_github
         self.key_abbrev = key_abbrev
-        if isinstance(fname, str):
+        if isinstance(fname, config.str_types):
             assert(os.path.isfile(fname))
             with open(fname, newline='', encoding='utf-8-sig') as fd:
                 reader = csv.DictReader(fd)

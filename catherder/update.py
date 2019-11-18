@@ -26,9 +26,9 @@ def call_catherder():
     parser.add_argument('--assignees', action='store_true',
                         help=('Update assignees on Github without moving the '
                               'cards.'))
-    parser.add_argument('--suspend-automation', action='store_true',
-                        help=('Suspend automation of project card movement '
-                              'across columns.'))
+    parser.add_argument('--dont-suspend-automation', action='store_true',
+                        help=('Don\'t suspend automation of project card '
+                              'movement across columns during update.'))
     parser.add_argument('--yes', '-y', action='store_true',
                         help=('Automatically answer yes to all questions '
                               'about updates.'))
@@ -50,7 +50,8 @@ def call_catherder():
         if args.github:
             logger.info("Updating Github from Smartsheet")
             x_gh.update_remote(
-                x_sm, suspend_progress_automation=args.suspend_automation)
+                x_sm, suspend_progress_automation=(
+                    not args.dont_suspend_automation))
         if args.assignees:
             logger.info("Updating Github assignees.")
             x_gh.update_remote(x_sm)

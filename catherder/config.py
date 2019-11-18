@@ -3,9 +3,15 @@ import sys
 import logging
 import shutil
 if sys.version_info[0] == 2:
-    import ConfigParser as configparser
+    from backports import configparser
+    input = raw_input
+    str_types = (str, unicode, bytearray)
+    unicode_type = unicode
 else:
     import configparser
+    input = input
+    str_types = (bytes, str, bytearray)
+    unicode_type = str
 logger = logging.getLogger(__name__)
 
 

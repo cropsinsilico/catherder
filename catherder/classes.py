@@ -13,9 +13,11 @@ import smartsheet
 import github
 from github import Github, Consts
 from catherder import names, utils, config
+input = config.input
 logger = logging.getLogger(__name__)
 
 
+_old_github_issue_format = None
 _github_issue_format = """\
 # {Task Name}
 
@@ -25,6 +27,7 @@ _github_issue_format = """\
 #### Collaborator(s): {Collaborator}
 #### Start Date: {Start}
 #### Finish Date: {Finish}
+#### Percentage Complete: {Reported Percentage Complete}
 
 ## Tasks
 
@@ -52,6 +55,8 @@ class UpdateAPI(object):
                  cache_repo=None, always_yes=False):
         self.project_name = project_name
         self.config = config.read_project_config(project_name=project_name)
+        if self.project_name is None:
+            self.project_name = self.config['general']['default_project']
         self.logger = logger
         self.remote_address = remote_address
         self.token = token
@@ -81,7 +86,7 @@ class UpdateAPI(object):
         try:
             self.names = names.Names(contacts)
         finally:
-            if not isinstance(contacts, str):
+            if not isinstance(contacts, config.str_types):
                 contacts.close()
         if not os.path.isdir(self.project_dir):
             os.mkdir(self.project_dir)
@@ -438,7 +443,7 @@ class GithubAPI(UpdateAPI):
     @classmethod
     def load_local(cls, address, default=False):
         r"""Get the local data for the specified address."""
-        if isinstance(address, str):
+        if isinstance(address, config.str_types):
             assert(os.path.isfile(address))
             with open(address, 'r') as fd:
                 out = json.load(fd)
@@ -522,7 +527,7 @@ class GithubAPI(UpdateAPI):
                 Defaults to False.
             suspend_progress_automation (bool, optional): If True, the
                 automation card for moving editted issues into the
-                'In progress' column will be suspended. Defaults to False.
+                'In progress' column will be suspended. Defaults to True.
 
         """
         map_milestones = {x.title: x for x in
@@ -853,7 +858,7 @@ class GithubAPI(UpdateAPI):
                     by_attr=True, func_validate='startswith')
 
         for c in columns:
-            if isinstance(c, str):
+            if isinstance(c, config.str_types):
                 column = self.github_project_map[c]
             elif isinstance(c, github.ProjectColumn.ProjectColumn):
                 column = self.github_project_map[c.name]
@@ -979,7 +984,7 @@ class SmartsheetAPI(UpdateAPI):
     @classmethod
     def load_local(cls, address, default=False):
         r"""Get the local data for the specified address."""
-        if isinstance(address, str):
+        if isinstance(address, config.str_types):
             assert(os.path.isfile(address))
             fd = open(address, newline='')
         else:
@@ -1005,7 +1010,7 @@ class SmartsheetAPI(UpdateAPI):
                         row.pop(k)
                     milestones.append(row)
         finally:
-            if isinstance(address, str):
+            if isinstance(address, config.str_types):
                 fd.close()
         return {'goals': goals, 'objectives': objectives,
                 'milestones': milestones}
@@ -1106,15 +1111,16 @@ class SmartsheetAPI(UpdateAPI):
             dict: Data for a Smartsheet objective.
 
         """
-        out = {'Task Name': '%s: %s' % (milestone['title'],
-                                        milestone['description']),
-               'Finish': milestone['due_on']}
+        out = {'Task Name': '%s: %s' % (str(milestone['title']),
+                                        str(milestone['description'])),
+               'Finish': str(milestone['due_on'])}
         if milestone['state'] == 'closed':
             out['Status'] = 'Complete'
         return out
 
     @classmethod
-    def get_milestone_from_Github_issue(cls, issue, existing=None):
+    def get_milestone_from_Github_issue(cls, issue, existing=None,
+                                        body_format=None):
         r"""Get a Smartsheet milestone from a Github issue.
 
         Args:
@@ -1122,6 +1128,9 @@ class SmartsheetAPI(UpdateAPI):
             existing (dict, optional): Dictionary that will be updated with
                 existing data not covered by the Smartsheet milestone. Defaults
                 to None.
+            body_format (str, optional): Format string that should be used
+                to parse the body of the issue. Defaults to
+                _github_issue_format if not provided.
 
         Returns:
             dict: Data for a Smartsheet milestone.
@@ -1129,15 +1138,17 @@ class SmartsheetAPI(UpdateAPI):
         """
         if existing is None:
             existing = {}
+        if body_format is None:
+            body_format = _github_issue_format
         existing['assignees'] = issue['assignees']
         # Parse issue body to get milestone
         body = issue['body'].replace('\r\n', '\n')
         regex_entry = r'([ ]?)\{([^\}]+)\}'
-        regex_body = _github_issue_format.replace(  # noqa: W605
+        regex_body = body_format.replace(  # noqa: W605
             '(', '\(').replace(
                 ')', '\)')
         field_order = []
-        for lead, x in re.findall(regex_entry, _github_issue_format):
+        for lead, x in re.findall(regex_entry, body_format):
             field_order.append(x)
             x_fmt = '{%s}' % x
             x_rgx = '(.*|\B)?'  # noqa: W605
@@ -1145,28 +1156,53 @@ class SmartsheetAPI(UpdateAPI):
                 x_fmt = lead + x_fmt
                 x_rgx = '(?:[ ]?)' + x_rgx
             regex_body = regex_body.replace(x_fmt, x_rgx)
-        # print('body:\n%s%s' % (body, 80*'='))
-        # print('format:\n%s%s' % (_github_issue_format, 80*'='))
-        # print("regex:\n%s%s" % (regex_body, 80*'='))
         field_values = re.findall(regex_body, body, flags=re.DOTALL)
         if not field_values:
+            if ((_old_github_issue_format
+                 and (_old_github_issue_format != body_format))):
+                return cls.get_milestone_from_Github_issue(
+                    issue=issue, existing=existing,
+                    body_format=_old_github_issue_format)
+            print('body:\n%s%s' % (body, 80*'='))
+            print('format:\n%s%s' % (body_format, 80*'='))
+            print("regex:\n%s%s" % (regex_body, 80*'='))
             raise Exception("Failed to parse body.")
         assert(len(field_values[0]) == len(field_order))
         out = {k: v for k, v in zip(field_order, field_values[0])}
+        for k in field_order:
+            if (((not isinstance(out[k], str)
+                  and isinstance(out[k], config.unicode_type)))):
+                out[k] = str(out[k])
         # pprint.pprint(out)
         for k in field_order:
             if k.startswith('existing_'):
                 existing[k] = out.pop(k)
         # Update milestone with other information from the issue
-        out.update({'Task Name': issue['title'],
-                    'Supporting Objective': issue['milestone']})
-        ncomplete = issue['body'].count('- [X]')
-        ntask = ncomplete + issue['body'].count('- [ ]')
-        if issue['state'] == 'closed':
+        out.update({'Task Name': str(issue['title']),
+                    'Supporting Objective': str(issue['milestone'])})
+        # ncomplete = issue['body'].count('- [X]')
+        # ntask = ncomplete + issue['body'].count('- [ ]')
+        # if issue['state'] == 'closed':
+        #     out['Status'] = 'Complete'
+        # elif ntask > 0:
+        #     out['Status'] = 'In Progress'
+        if issue['column'] == 'Done':
             out['Status'] = 'Complete'
-        elif ntask > 0:
-            # out['Status'] = 'In Progress (%d/%d)' % (ncomplete, ntask)
+        elif issue['column'] == 'In progress':
             out['Status'] = 'In Progress'
+        elif issue['column'] == 'To do':
+            # Don't set this. There is a mix of '' and 'Not Started'
+            if ((datetime.datetime.strptime(out['Start'], "%m/%d/%y")
+                 < datetime.datetime.today())):
+                out['Status'] = 'Not Started'
+            else:
+                out['Status'] = ''
+        else:  # pragma: debug
+            raise ValueError("Unsupported column: '%s'" % issue['column'])
+        # Move collaborators
+        if out.get('Collaborator', None):
+            out['Assigned To'] += ', ' + out['Collaborator']
+        out.pop('Collaborator', None)
         return out
 
     def update_from_github(self, prev, other):
@@ -1207,9 +1243,6 @@ class SmartsheetAPI(UpdateAPI):
                 self.logger.info("Non-milestone issue: '%s'" % x_gh['title'])
                 continue
             x_sm = self.get_milestone_from_Github_issue(x_gh)
-            if x_sm.get('Collaborator', None):
-                x_sm['Assigned To'] += ', ' + x_sm['Collaborator']
-            x_sm.pop('Collaborator', None)
             y_sm = map_milestones.get(x_sm['Task Name'], None)
             column = card_map[x_gh['title']]['column'].name
             if column == 'In progress':

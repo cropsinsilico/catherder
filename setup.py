@@ -28,8 +28,8 @@ setup(
 
     packages=find_packages(exclude=('tests',)),
 
-    install_requires=['PyGithub', 'smartsheet-python-sdk'],
-
+    install_requires=['PyGithub', 'smartsheet-python-sdk',
+                      'backports'],
     classifiers=[
         'Development Status :: 2 - Pre-Alpha',
         'License :: OSI Approved :: MIT License',
