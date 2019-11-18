@@ -927,8 +927,11 @@ class GithubAPI(UpdateAPI):
                 suspended. Defaults to '###### Automation Rules'.
 
         """
-        card = self.get_card(columns=column_name, card_prefix=card_prefix)
-        self.edit_card(card, archived=True)
+        try:
+            card = self.get_card(columns=column_name, card_prefix=card_prefix)
+            self.edit_card(card, archived=True)
+        except ValueError:
+            pass
 
     def restore_card(self, column_name, card_prefix='###### Automation Rules'):
         r"""Restore automation card.
@@ -998,7 +1001,9 @@ class SmartsheetAPI(UpdateAPI):
             reader = csv.DictReader(fd)
             objective = None
             for row in reader:
-                if row['Task Name'].startswith('Goal'):
+                if not row['Task Name']:
+                    continue
+                elif row['Task Name'].startswith('Goal'):
                     goals.append(row)
                 elif row['Task Name'].startswith('Supporting objective'):
                     objective = row

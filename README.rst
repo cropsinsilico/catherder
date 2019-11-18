@@ -56,21 +56,23 @@ Pre-Installation Steps
 It is recommended, but not required, that you use anaconda to manage your Python environment in order to avoid issues with dependency conflicts.
 
 #. Download and run the miniconda installer for your operating system from `here <https://docs.conda.io/en/latest/miniconda.html>`_
-#. Create and activate a new conda environment with Python 3.6 and a name of your choosing from the terminal on Linux/OSX::
+#. Create and activate a new conda environment with Python 3.6 and a name of your choosing from the terminal on Linux/OSX or Anaconda prompt on Windows::
 
      $ conda create -n <name> python=3.6
      $ conda activate <name>
 
-   or Anaconda prompt on Windows.::
-
-     > conda create -n <name> python=3.6
-     > activate <name>
-     
 #. Create a Github authentication `token <https://help.github.com/en/articles/creating-a-personal-access-token-for-the-command-line>`__ and save it to a secure location.
 #. Create a Smartsheets authenticaiton `token <https://smartsheet-platform.github.io/api-docs/index.html#authentication-and-access-tokens>`__ and save it to a secure location.
 
 Installation Steps
 ^^^^^^^^^^^^^^^^^^
+
+From PyPI
+~~~~~~~~~
+
+Enter the following command from your terminal prompt (or Anaconda promp on Windows).::
+
+     $ pip install catherder
 
 From Source
 ~~~~~~~~~~~
@@ -83,13 +85,6 @@ From Source
 
      $ cd catherder
      $ pip install -e .
-
-From PyPI
-~~~~~~~~~
-
-Enter the following command from your terminal prompt (or Anaconda promp on Windows).::
-
-     $ pip install catherder
 
 From conda-forge
 ~~~~~~~~~~~~~~~~
