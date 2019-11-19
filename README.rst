@@ -138,6 +138,7 @@ Authors
 Todo
 ----
 
+- Fix bug where windows paths cause cache upload to root directory of repo
 - Make package general (e.g. 'Task Name' column coded in config file)
 - Create method for getting contacts from Smartsheet
 - Command for rolling back to a previous cache entry

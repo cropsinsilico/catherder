@@ -1,6 +1,7 @@
 import logging
 import argparse
 from catherder import classes, config
+from catherder.fix_path import fix_paths
 logFormatter = logging.Formatter("[%(levelname)-8s] %(message)s")
 logger = logging.getLogger('catherder')
 logger.setLevel(logging.INFO)
@@ -13,6 +14,8 @@ def call_catherder():
     r"""Call catherder."""
     parser = argparse.ArgumentParser(
         "Update the cache's of project data on Github/Smartsheet.")
+    parser.add_argument('--fix-windows-paths', action='store_true',
+                        help='Fix windows paths in current directory.')
     parser.add_argument('--configure', action='store_true',
                         help='Run configuration for the specified projects.')
     parser.add_argument('project', nargs='*',
@@ -44,6 +47,9 @@ def call_catherder():
             config.read_project_config(project)
         x_sm = classes.SmartsheetAPI(project_name=project, always_yes=args.yes)
         x_gh = classes.GithubAPI(project_name=project, always_yes=args.yes)
+        if args.fix_windows_paths:
+            for x in [x_sm, x_gh]:
+                fix_paths(x.config[x.name]['cache_dir'])
         if args.smartsheet:
             logger.info("Updating Smartsheet from Github")
             x_sm.update_remote(x_gh)

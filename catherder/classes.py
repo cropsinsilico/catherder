@@ -284,7 +284,8 @@ class UpdateAPI(object):
         print(question)
         if self.always_yes or (input('y/[n]?: ').lower() in ['y', 'yes']):
             with open(new_cache_local, 'rb') as fd:
-                self.cache_repo.create_file(new_cache, message, fd.read())
+                self.cache_repo.create_file(new_cache.replace(
+                    os.path.sep, '/'), message, fd.read())
         os.remove(new_cache_local)
 
     def load_most_recent(self, default=False):

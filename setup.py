@@ -16,7 +16,7 @@ def read(filename):
 
 setup(
     name="catherder",
-    version="0.1.0",
+    version="0.1.1",
     url="https://github.com/cropsinsilico/catherder",
     license='MIT',
 
