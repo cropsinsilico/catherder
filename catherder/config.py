@@ -2,12 +2,12 @@ import os
 import sys
 import logging
 import shutil
-if sys.version_info[0] == 2:
+if sys.version_info[0] == 2:  # pragma: Python 2
     from backports import configparser
     input = raw_input
     str_types = (str, unicode, bytearray)
     unicode_type = unicode
-else:
+else:  # pragma: Python 3
     import configparser
     input = input
     str_types = (bytes, str, bytearray)
